@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"testing"
+	"xorm.io/xorm"
 
 	"github.com/aluka-7/common"
 	"github.com/aluka-7/configuration"
@@ -37,8 +38,9 @@ func initConfig(t *testing.T) {
 func TestDataSource(t *testing.T) {
 	initConfig(t)
 	Convey("test DataSource", t, func() {
-		eng := datasource.Engine(conf, "1000")
-		orm := eng.Orm("")
+		orm := datasource.Engine(conf, "1000").Orm("")
+		var slaveOrm []*xorm.Engine
+		slaveOrm = append(slaveOrm, datasource.Engine(conf, "1000").Orm(""))
 		Convey("Test a sync", func() {
 			err := orm.DropTables(new(Test))
 			So(err, ShouldBeNil)
@@ -53,7 +55,7 @@ func TestDataSource(t *testing.T) {
 			So(actual, ShouldEqual, expected)
 		})
 		Convey("Test Orm Transaction", func() {
-			repo := base.NewBaseRepository(orm, map[string]search.Filter{
+			repo := base.NewBaseRepository(orm, slaveOrm, map[string]search.Filter{
 				"email": {FieldName: "email", Operator: search.LIKE},
 				"id":    {FieldName: "id", Operator: search.IN},
 			})
@@ -78,7 +80,7 @@ func TestDataSource(t *testing.T) {
 		})
 		Convey("Test Orm Base Query", func() {
 			var val []Test
-			repo := base.NewBaseRepository(orm, map[string]search.Filter{
+			repo := base.NewBaseRepository(orm, slaveOrm, map[string]search.Filter{
 				"email": {FieldName: "email", Operator: search.LIKE},
 				"id":    {FieldName: "id", Operator: search.IN},
 			})

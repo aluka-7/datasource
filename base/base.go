@@ -2,6 +2,7 @@ package base
 
 import (
 	"context"
+	"math/rand"
 
 	"github.com/aluka-7/common"
 	"github.com/aluka-7/datasource/search"
@@ -14,16 +15,18 @@ type IBaseRepository interface {
 	ReadById(ctx context.Context, id int64, bean interface{}, cols ...string) (bool, error)
 	Query(ctx context.Context, cq common.Query, list interface{}, count interface{}, cols ...string) (page *common.Pagination, err error)
 	Session(ctx context.Context) *xorm.Session
+	SSession(ctx context.Context) *xorm.Session
 	TxSave(tx *xorm.Session, bean interface{}) (int64, error)
 	TxUpdate(tx *xorm.Session, id int64, bean interface{}, cols ...string) (int64, error)
 }
 
-func NewBaseRepository(orm *xorm.Engine, column map[string]search.Filter) BaseRepository {
-	return BaseRepository{orm: orm, column: column}
+func NewBaseRepository(orm *xorm.Engine, sorm []*xorm.Engine, column map[string]search.Filter) BaseRepository {
+	return BaseRepository{orm: orm, sorm: sorm, column: column}
 }
 
 type BaseRepository struct {
 	orm    *xorm.Engine
+	sorm   []*xorm.Engine
 	column map[string]search.Filter
 }
 
@@ -31,9 +34,14 @@ func (b *BaseRepository) Xorm() *xorm.Engine {
 	return b.orm
 }
 
+func (b *BaseRepository) SXorm() *xorm.Engine {
+	return b.sorm[rand.Intn(len(b.sorm))]
+}
+
 func (b *BaseRepository) Save(bean interface{}) (int64, error) {
 	return b.orm.Insert(bean)
 }
+
 func (b *BaseRepository) Update(id int64, bean interface{}, cols ...string) (int64, error) {
 	s := b.orm.ID(id)
 	if len(cols) > 0 {
@@ -43,7 +51,7 @@ func (b *BaseRepository) Update(id int64, bean interface{}, cols ...string) (int
 }
 
 func (b *BaseRepository) ReadById(ctx context.Context, id int64, bean interface{}, cols ...string) (bool, error) {
-	s := b.orm.Context(ctx).ID(id)
+	s := b.sorm[rand.Intn(len(b.sorm))].Context(ctx).ID(id)
 	if len(cols) > 0 {
 		s.Cols(cols...)
 	}
@@ -52,7 +60,7 @@ func (b *BaseRepository) ReadById(ctx context.Context, id int64, bean interface{
 
 func (b *BaseRepository) Query(ctx context.Context, cq common.Query, list interface{}, count interface{}, cols ...string) (page *common.Pagination, err error) {
 	query := search.NewQuery(cq)
-	session := b.orm.Context(ctx)
+	session := b.sorm[rand.Intn(len(b.sorm))].Context(ctx)
 	query.MarkOrmFiltered(b.column, session)
 	order := query.MarkOrder(b.column)
 	page = query.MarkPage()
@@ -72,7 +80,11 @@ func (b *BaseRepository) Query(ctx context.Context, cq common.Query, list interf
 }
 
 func (b *BaseRepository) Session(ctx context.Context) *xorm.Session {
-	return b.orm.NewSession().Context(ctx)
+	return b.orm.Context(ctx)
+}
+
+func (b *BaseRepository) SSession(ctx context.Context) *xorm.Session {
+	return b.sorm[rand.Intn(len(b.sorm))].Context(ctx)
 }
 
 func (b *BaseRepository) TxSave(tx *xorm.Session, bean interface{}) (int64, error) {
